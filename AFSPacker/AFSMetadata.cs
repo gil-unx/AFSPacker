@@ -84,6 +84,11 @@ namespace AFSPacker
                 throw new ArgumentNullException(nameof(metadataFileNamePath));
             }
 
+            if (!File.Exists(metadataFileNamePath))
+            {
+                return null;
+            }
+
             string metadataContents = File.ReadAllText(metadataFileNamePath);
 
             JsonSerializerOptions options = new JsonSerializerOptions()

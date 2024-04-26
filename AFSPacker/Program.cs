@@ -30,29 +30,56 @@ namespace AFSPacker
                         return;
                     }
 
-                    AFSMetadata metadata = AFSMetadata.LoadFromFile(args[1] + ".json");
+                    string metadataFilePath = args[1] + ".json";
+                    AFSMetadata metadata = AFSMetadata.LoadFromFile(metadataFilePath);
 
                     using (AFS afs = new AFS())
                     {
-                        afs.NotifyProgress += Progress;
+                        afs.NotifyProgress += PrintMessage;
 
-                        afs.HeaderMagicType = metadata.HeaderMagicType;
-                        afs.AttributesInfoType = metadata.AttributesInfoType;
-                        afs.EntryBlockAlignment = metadata.EntryBlockAlignment;
-
-                        for (int e = 0; e < metadata.Entries.Length; e++)
+                        if (metadata == null)
                         {
-                            if (metadata.Entries[e].IsNull)
-                            {
-                                afs.AddNullEntry();
-                            }
-                            else
-                            {
-                                string filePath = Path.Combine(args[1], metadata.Entries[e].FileName);
-                                FileEntry fileEntry = afs.AddEntryFromFile(filePath, metadata.Entries[e].Name);
+                            PrintMessage(NotificationType.Warning, $"\"{metadataFilePath}\" metadata file has not been found. Creating an AFS file with default settings, which might not be what you want.");
 
-                                if (!metadata.AllAttributesContainEntrySize)
-                                    fileEntry.CustomData = metadata.Entries[e].CustomData;
+                            string[] files = Directory.GetFiles(args[1]);
+
+                            for (int f = 0; f < files.Length; f++)
+                            {
+                                string filePath = files[f];
+                                string fileName = Path.GetFileName(filePath);
+
+                                if (fileName.Length > 32)
+                                {
+                                    string fullFileName = fileName;
+                                    string extension = Path.GetExtension(filePath);
+                                    fileName = fullFileName.Substring(0, 32 - extension.Length) + extension;
+
+                                    PrintMessage(NotificationType.Warning, $"File \"{fullFileName}\" is longer than 32 characters and it will be truncated to \"{fileName}\".");
+                                }
+
+                                FileEntry fileEntry = afs.AddEntryFromFile(files[f], fileName);
+                            }
+                        }
+                        else
+                        {
+                            afs.HeaderMagicType = metadata.HeaderMagicType;
+                            afs.AttributesInfoType = metadata.AttributesInfoType;
+                            afs.EntryBlockAlignment = metadata.EntryBlockAlignment;
+
+                            for (int e = 0; e < metadata.Entries.Length; e++)
+                            {
+                                if (metadata.Entries[e].IsNull)
+                                {
+                                    afs.AddNullEntry();
+                                }
+                                else
+                                {
+                                    string filePath = Path.Combine(args[1], metadata.Entries[e].FileName);
+                                    FileEntry fileEntry = afs.AddEntryFromFile(filePath, metadata.Entries[e].Name);
+
+                                    if (!metadata.AllAttributesContainEntrySize)
+                                        fileEntry.CustomData = metadata.Entries[e].CustomData;
+                                }
                             }
                         }
 
@@ -69,7 +96,7 @@ namespace AFSPacker
 
                     using (AFS afs = new AFS(args[1]))
                     {
-                        afs.NotifyProgress += Progress;
+                        afs.NotifyProgress += PrintMessage;
 
                         afs.ExtractAllEntriesToDirectory(args[2]);
 
@@ -136,15 +163,14 @@ namespace AFSPacker
             catch (Exception e)
             {
                 Console.WriteLine();
-                Console.ForegroundColor = ConsoleColor.Red;
-                Console.WriteLine($"[{DateTime.Now.ToLongTimeString()}] [Error] {e.Message}");
+                PrintMessage(NotificationType.Error, e.Message);
             }
 #endif
 
             Console.ForegroundColor = ConsoleColor.Gray;
         }
 
-        static void Progress(NotificationType type, string message)
+        static void PrintMessage(NotificationType type, string message)
         {
             switch (type)
             {
@@ -157,6 +183,9 @@ namespace AFSPacker
                     break;
                 case NotificationType.Success:
                     Console.ForegroundColor = ConsoleColor.Green;
+                    break;
+                case NotificationType.Error:
+                    Console.ForegroundColor = ConsoleColor.Red;
                     break;
             }
 
